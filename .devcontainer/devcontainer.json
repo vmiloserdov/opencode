@@ -1,0 +1,8 @@
+{
+  "name": "opencode-dev",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:latest",
+  "features": {
+    "ghcr.io/devcontainers-contrib/features/bun:1": {}
+  },
+  "postCreateCommand": "bun --version"
+}
