@@ -16,6 +16,8 @@ type Commit = {
 }
 
 type User = Map<string, Set<string>>
+
+// This is the shape returned by the GitHub API
 type Diff = {
   sha: string
   login: string | null
@@ -57,17 +59,33 @@ async function latest() {
   return release.tag_name.replace(/^v/, "")
 }
 
+/**
+ * Outputs which commits exist on head that do not exist on base
+ * @param base Base ref (could be commit or branch)
+ * @param head End ref (could be commit or branch)
+ * @returns List of Diff objects (representing commits? )
+ */
 async function diff(base: string, head: string) {
   const list: Diff[] = []
+  // loop forever or until we actually page
   for (let page = 1; ; page++) {
+    // get the diff using github api, will be formatted in json
     const text =
       await $`gh api "/repos/${repo}/compare/${base}...${head}?per_page=100&page=${page}" --jq '.commits[] | {sha: .sha, login: .author.login, message: .commit.message}'`.text()
+
+    // convert text to a list of Diff type json objects
     const batch = text
       .split("\n")
       .filter(Boolean)
       .map((line) => JSON.parse(line) as Diff)
+
+    // if this is the last page and it's empty, return the list
     if (batch.length === 0) break
+
+    // append every item in batch to the list variable
     list.push(...batch)
+
+    // if there is less than 100 elements, then it is the last page, so break and return list
     if (batch.length < 100) break
   }
   return list
@@ -88,12 +106,17 @@ function type(message: string) {
 
 function reverted(commits: Commit[]) {
   const seen = new Map<string, Commit>()
+  // map of message -> commit containing the message
 
   for (const commit of commits) {
     const match = commit.message.match(/^Revert "(.+)"$/)
     if (match) {
       const msg = match[1]!
+
+      // if this commit reverts some previous commit, remove that previous commit
       if (seen.has(msg)) seen.delete(msg)
+
+      // else add that commit to the seen map
       else seen.set(commit.message, commit)
       continue
     }
@@ -110,27 +133,46 @@ function reverted(commits: Commit[]) {
   return [...seen.values()]
 }
 
+/**
+ * Most common use of this is to get all the commits starting from a certain 
+ * release (in which case v is appended) to the HEAD, which would be the latest
+ * commit on the branch. 
+ * 
+ * @param from Base ref
+ * @param to End ref
+ * @returns List of commits
+ */
 async function commits(from: string, to: string) {
+  // append v or return HEAD
   const base = ref(from)
   const head = ref(to)
 
+  // data: {sha: string -> {login: string, message: string}}
   const data = new Map<string, { login: string | null; message: string }>()
+
+  // for each Diff object in from the base to the head
   for (const item of await diff(base, head)) {
     data.set(item.sha, { login: item.login, message: item.message.split("\n")[0] ?? "" })
   }
 
   const log =
     await $`git log ${base}..${head} --format=%H -- packages/opencode packages/sdk packages/plugin packages/desktop packages/app sdks/vscode packages/extensions github`.text()
+  // log is a string that lists all the commit hashes from base to head
+
 
   const list: Commit[] = []
+
+  // for all non-empty and non-chore commit hashes 
   for (const hash of log.split("\n").filter(Boolean)) {
     const item = data.get(hash)
     if (!item) continue
     if (item.message.match(/^(ignore:|test:|chore:|ci:|release:)/i)) continue
 
+    // which files were changed by a specific commit
     const diff = await $`git diff-tree --no-commit-id --name-only -r ${hash}`.text()
     const areas = new Set<string>()
 
+    // for each non-empty file in the current commit, annotate which areas have been changed (abstraction)
     for (const file of diff.split("\n").filter(Boolean)) {
       if (file.startsWith("packages/opencode/src/cli/cmd/")) areas.add("tui")
       else if (file.startsWith("packages/opencode/")) areas.add("core")
@@ -140,8 +182,11 @@ async function commits(from: string, to: string) {
       else if (file.startsWith("sdks/vscode/") || file.startsWith("github/")) areas.add("extensions/vscode")
     }
 
+    // if the commit did not have any changed files then skip the entire for loop
+    // although why would it be a commit at all then?
     if (areas.size === 0) continue
 
+    // create a commit-like object; areas - which abstract areas of the codebase were changed
     list.push({
       hash: hash.slice(0, 7),
       author: item.login,
@@ -150,6 +195,7 @@ async function commits(from: string, to: string) {
     })
   }
 
+  // return a clean list excluding 1) commits that were reverted 2) commits that revert those
   return reverted(list)
 }
 
