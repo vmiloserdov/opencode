@@ -133,6 +133,22 @@ function reverted(commits: Commit[]) {
   return [...seen.values()]
 }
 
+
+function find_areas(diff: string){
+  const areas = new Set<string>()
+  for (const file of diff.split("\n").filter(Boolean)) {
+      if (file.startsWith("packages/opencode/src/cli/cmd/")) areas.add("tui")
+      else if (file.startsWith("packages/opencode/")) areas.add("core")
+      else if (file.startsWith("packages/desktop/src-tauri/")) areas.add("tauri")
+      else if (file.startsWith("packages/desktop/") || file.startsWith("packages/app/")) areas.add("app")
+      else if (file.startsWith("packages/sdk/") || file.startsWith("packages/plugin/")) areas.add("sdk")
+      else if (file.startsWith("sdks/vscode/") || file.startsWith("github/")) areas.add("extensions/vscode")
+  }
+
+  return areas;
+}
+
+
 /**
  * Most common use of this is to get all the commits starting from a certain 
  * release (in which case v is appended) to the HEAD, which would be the latest
@@ -142,7 +158,7 @@ function reverted(commits: Commit[]) {
  * @param to End ref
  * @returns List of commits
  */
-async function commits(from: string, to: string) {
+export async function commits(from: string, to: string) {
   // append v or return HEAD
   const base = ref(from)
   const head = ref(to)
@@ -170,17 +186,7 @@ async function commits(from: string, to: string) {
 
     // which files were changed by a specific commit
     const diff = await $`git diff-tree --no-commit-id --name-only -r ${hash}`.text()
-    const areas = new Set<string>()
-
-    // for each non-empty file in the current commit, annotate which areas have been changed (abstraction)
-    for (const file of diff.split("\n").filter(Boolean)) {
-      if (file.startsWith("packages/opencode/src/cli/cmd/")) areas.add("tui")
-      else if (file.startsWith("packages/opencode/")) areas.add("core")
-      else if (file.startsWith("packages/desktop/src-tauri/")) areas.add("tauri")
-      else if (file.startsWith("packages/desktop/") || file.startsWith("packages/app/")) areas.add("app")
-      else if (file.startsWith("packages/sdk/") || file.startsWith("packages/plugin/")) areas.add("sdk")
-      else if (file.startsWith("sdks/vscode/") || file.startsWith("github/")) areas.add("extensions/vscode")
-    }
+    const areas: Set<string> = find_areas(diff)
 
     // if the commit did not have any changed files then skip the entire for loop
     // although why would it be a commit at all then?
