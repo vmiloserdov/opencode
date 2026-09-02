@@ -5,10 +5,12 @@ import { tmpdir } from "os"
 import path from "path"
 import { commits } from "./raw-changelog"
 
+
+
 /**
- * commits(from, to) has two external dependencies:
+ * commits(from, to) has two dependencies:
  *   1. the GitHub CLI (`gh api .../compare/...`), used to look up each
- *      commit's author login and full message
+ *      commit's author username and full message
  *   2. the local git repo (`git log`, `git diff-tree`), used to figure out
  *      which commits touched which package paths
  *
@@ -16,8 +18,9 @@ import { commits } from "./raw-changelog"
  * (it isn't resolved through the normal module registry), so instead of
  * mocking, this test builds a real temporary git repo and shims a fake `gh`
  * executable onto PATH that returns fixed data for the one API call
- * commits() actually makes. That exercises the real git plumbing exactly as
- * commits() uses it, while keeping the GitHub side deterministic.
+ * commits() actually makes. 
+ * 
+ * I have used Claude to write these tests and help me come up with a working mechanism. 
  */
 
 let repoDir: string
