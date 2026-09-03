@@ -8,6 +8,7 @@ import { commits } from "./raw-changelog"
 
 
 /**
+ * IGNORE: Comment to re-run test suite
  * commits(from, to) has two dependencies:
  *   1. the GitHub CLI (`gh api .../compare/...`), used to look up each
  *      commit's author username and full message
